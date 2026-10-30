@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+    <meta charset="UTF-8">
+    <title>CIVE UDOM Tree Inventory - Automatic Web GIS (100% Offline)</title>
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background-color: #1e1e24; color: #fff; }
+        #layout { display: flex; height: 100vh; width: 100vw; }
+        #sidebar { width: 320px; background-color: #2a2a35; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; z-index: 10; }
+        #map-container { flex: 1; position: relative; background-color: #f5f6fa; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        canvas { background-color: #eef2f7; cursor: pointer; }
+        .stats-card { background: #3a3a4c; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #4caf50; }
+        h2, h3 { margin-top: 0; color: #4caf50; }
+        .tree-item { padding: 6px; border-bottom: 1px solid #3a3a4c; font-size: 13px; color: #ddd; }
+        #tooltip { position: absolute; background: rgba(0,0,0,0.9); color: #fff; padding: 12px; border-radius: 6px; display: none; pointer-events: none; border: 1px solid #4caf50; font-size: 13px; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+
+    <div id="layout">
+        <div id="sidebar">
+            <h2>🌳 CIVE-UDOM GIS</h2>
+            <p style="font-size: 12px; color: #aaa;">Hali ya Mfumo: <span style="color: #4caf50; font-weight: bold;">AUTOMATIC OFFLINE</span></p>
+            <div class="stats-card">
+                <h3>Takwimu za Mradi</h3>
+                <p>Miti ya CIVE (Postgres): <b>889</b></p>
+                <p>Eneo: College of Informatics</p>
+            </div>
+            <h3>Orodha ya Miti (PostgreSQL)</h3>
+            <div id="tree-list">Inapakia kutoka database...</div>
+        </div>
+        
+        <div id="map-container">
+            <canvas id="spatialCanvas"></canvas>
+            <div id="tooltip"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('spatialCanvas');
+        const ctx = canvas.getContext('2d');
+        let treeData = [];
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            drawCompleteGISMap();
+        }
+
+        // Vuta data kutoka kwenye API ya Django REST Framework iliyopo kwenye PC yako
+        fetch('/api/trees/')
+            .then(res => res.json())
+            .then(data => {
+                treeData = data.features;
+                let listHtml = '';
+                treeData.slice(0, 35).forEach(t => {
+                    listHtml += `<div class="tree-item">🌳 S/N ${t.properties.serial_number}: ${t.properties.tree_name}</div>`;
+                });
+                document.getElementById('tree-list').innerHTML = listHtml;
+                resizeCanvas();
+            })
+            .catch(err => console.error(err));
+
+        function drawCompleteGISMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 1. CHORA MAJENGO YA CIVE-UDOM AUTOMATICALLY (Offline Vector Features)
+            ctx.fillStyle = '#dcdde1';
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            
+            // Jengo la CIVE Administration Block & Auditorium
+            ctx.fillRect(canvas.width/2 - 80, canvas.height/2 - 50, 160, 90);
+            ctx.strokeRect(canvas.width/2 - 80, canvas.height/2 - 50, 160, 90);
+            
+            // Jengo la CIVE New Labs (Maabara)
+            ctx.fillRect(canvas.width/2 - 120, canvas.height/2 - 180, 100, 60);
+            ctx.strokeRect(canvas.width/2 - 120, canvas.height/2 - 180, 100, 60);
+            
+            // Jengo la Cafeteria / USCF Church Area
+            ctx.fillRect(canvas.width/2 + 100, canvas.height/2 - 120, 70, 50);
+            ctx.strokeRect(canvas.width/2 + 100, canvas.height/2 - 120, 70, 50);
+
+            // Maandishi ya Majengo (Labels)
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText('CIVE AUDITORIUM', canvas.width/2 - 55, canvas.height/2 + 5);
+            ctx.fillText('CIVE NEW LABS', canvas.width/2 - 115, canvas.height/2 - 145);
+            ctx.fillText('CAFETERIA', canvas.width/2 + 105, canvas.height/2 - 95);
+
+            // 2. CHORA BARABARA ZA CIVE AUTOMATICALLY (Offline Roads Network)
+            ctx.strokeStyle = '#f5b041';
+            ctx.lineWidth = 14;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Junction Road (Barabara kuu ya CIVE)
+            ctx.beginPath();
+            ctx.moveTo(50, canvas.height/2 + 100);
+            ctx.lineTo(canvas.width - 50, canvas.height/2 + 100);
+            ctx.stroke();
+            
+            // Ujasiri Road
+            ctx.beginPath();
+            ctx.moveTo(canvas.width/2 + 50, 50);
+            ctx.lineTo(canvas.width/2 + 50, canvas.height - 50);
+            ctx.stroke();
+
+            // Katikati ya Barabara (Dashed white lines)
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath(); ctx.moveTo(50, canvas.height/2 + 100); ctx.lineTo(canvas.width - 50, canvas.height/2 + 100); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(canvas.width/2 + 50, 50); ctx.lineTo(canvas.width/2 + 50, canvas.height - 50); ctx.stroke();
+            ctx.setLineDash([]); // Reset
+
+            // Majina ya Barabara (Road Labels)
+            ctx.fillStyle = '#7e5109';
+            ctx.font = 'italic 11px Arial';
+            ctx.fillText('Junction Road', 80, canvas.height/2 + 115);
+            ctx.fillText('Ujasiri Road', canvas.width/2 + 60, 120);
+
+            // 3. CHORA VITONE VYA MITI YA POSTGRESQL (Spatial Data Points)
+            if (treeData.length === 0) return;
+            let lats = treeData.map(t => t.geometry.coordinates[1]);
+            let lons = treeData.map(t => t.geometry.coordinates[0]);
+            let minLat = Math.min(...lats), maxLat = Math.max(...lats);
+            let minLon = Math.min(...lons), maxLon = Math.max(...lons);
+
+            treeData.forEach(tree => {
+                let lon = tree.geometry.coordinates[0];
+                let lat = tree.geometry.coordinates[1];
+
+                // Kulinganisha Spatial Coordinates na saizi ya Canvas ya CIVE
+                let x = ((lon - minLon) / (maxLon - minLon || 1)) * (canvas.width - 240) + 120;
+                let y = canvas.height - (((lat - minLat) / (maxLat - minLat || 1)) * (canvas.height - 240) + 120);
+
+                tree.pX = x; tree.pY = y;
+
+                // Chora doti thabiti ya kila mti
+                ctx.beginPath();
+                ctx.arc(x, y, 6.5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#27ae60'; // Kijani
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+        }
+
+        // Interactive Tooltip (Mouse Hover)
+        const tooltip = document.getElementById('tooltip');
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mX = e.clientX - rect.left;
+            const mY = e.clientY - rect.top;
+            let found = false;
+            
+            for (let tree of treeData) {
+                let d = Math.hypot(tree.pX - mX, tree.pY - mY);
+                if (d < 8) {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (mX + 15) + 'px';
+                    tooltip.style.top = (mY + 15) + 'px';
+                    tooltip.innerHTML = `
+                        <b style="color:#2ecc71; font-size:14px;">🌳 Taarifa za Mti</b><br>
+                        <b>Aina:</b> ${tree.properties.tree_name}<br>
+                        <b>Namba:</b> S/N ${tree.properties.serial_number}<br>
+                        <b>Altitude:</b> ${tree.properties.altitude} m
+                    `;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) tooltip.style.display = 'none';
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+    </script>
+</body>
+</html>
